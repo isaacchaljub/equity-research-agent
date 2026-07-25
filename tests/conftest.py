@@ -5,6 +5,7 @@ import pytest
 os.environ.setdefault("GROQ_API_KEY", "test-groq-key")
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key")
 os.environ.setdefault("SERPER_API_KEY", "test-serper-key")
+os.environ["LANGSMITH_TRACING"] = "false"
 
 
 @pytest.fixture(autouse=True)

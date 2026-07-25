@@ -131,6 +131,7 @@ class ResilientChat:
         self.backup_retries = backup_retries
         self._use_backup = False
 
+    @traceable(run_type="llm", name="model", process_inputs=lambda inputs: {k: v for k, v in inputs.items() if k != "self"})
     def invoke(self, messages: list[BaseMessage]) -> AIMessage:
         last_error: Exception | None = None
         if not self._use_backup:
@@ -761,8 +762,12 @@ def verify_answer(question: str, answer: str, analyst_messages: list[BaseMessage
         return f"Verification unavailable ({e.__class__.__name__})."
 
 
+@traceable(run_type="chain", name="equity_research")
 def process_query(query: str, vector_db: FAISS | None = None) -> str:
     """Answer an investing question, then fact-check the answer against the sources.
+
+    The `@traceable` root makes one LangSmith trace per request, with the analyst run, its model
+    and tool calls, and the verifier run all nested under it (rather than as loose siblings).
 
     The cache is a deterministic fast-path around the agents; everything else — which tools to
     use, whether to escalate to the web, and the final wording — is the model's call."""
