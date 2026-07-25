@@ -1,9 +1,10 @@
 # 📈 Equity Research Agent
 
 An **agentic** equity-research assistant. Ask an investing question in plain English and a
-language model decides — at run time — how to answer it: search the **company filings** you've
-loaded, pull **live market data**, do the **math**, or go to the **web** for recent news. Then a
-second agent **fact-checks** the answer against the exact sources before you see it.
+language model decides — at run time — how to answer it: pull a company's actual **10-K from SEC
+EDGAR** by ticker, search those **filings**, pull **live market data**, do the **math**, or go to
+the **web** for recent news. Then a second agent **fact-checks** the answer against the exact
+sources before you see it. Give it a ticker and it does the whole research loop.
 
 No orchestration graph, no hardcoded router — just a small, legible agent loop.
 
@@ -20,7 +21,9 @@ order of steps isn't known until it runs.
 ```mermaid
 flowchart TD
     U[User question] --> A{AnalystAgent<br/>orchestrator}
-    A -->|fundamentals / risks| F[search_filings<br/>FAISS over PDFs]
+    A -->|pull a 10-K by ticker| E[fetch_filing<br/>SEC EDGAR]
+    E -.indexes.-> F
+    A -->|fundamentals / risks| F[search_filings<br/>FAISS index]
     A -->|live numbers| M[get_market_data<br/>yfinance]
     A -->|ratios / growth| C[calculator<br/>safe arithmetic]
     A -->|recent news| W[research_web<br/>nested web agent]
@@ -41,9 +44,11 @@ window; each agent just supplies tools and a prompt.
 
 ## Features
 
+- **Pulls real filings**: `fetch_filing(ticker)` downloads a company's latest 10-K from **SEC
+  EDGAR** (no key or account needed) and indexes it — research a company from just its ticker.
 - **Multi-agent**: orchestrator → nested web-research sub-agent → fact-checking verifier.
-- **Four tools**: semantic filing search (FAISS), live market data (`yfinance`), a safe
-  arithmetic calculator, and web research.
+- **Five tools**: EDGAR filing fetch, semantic filing search (FAISS), live market data
+  (`yfinance`), a safe arithmetic calculator, and web research.
 - **Fact-checking**: every answer is checked claim-by-claim against the tool evidence; unsupported
   claims are flagged.
 - **Resilient models**: the web agent tries Gemini, backs off (20s → 60s), then falls back to
@@ -51,7 +56,7 @@ window; each agent just supplies tools and a prompt.
 - **Bounded context**: a sliding window keeps token cost flat as conversations grow.
 - **Three ways to use it**: interactive CLI, FastAPI service, and a Streamlit chat UI.
 - **Traced**: drop in a LangSmith key and every run shows up as a nested trace.
-- **Tested**: 27 unit + mocked-integration tests, no network required.
+- **Tested**: 33 unit + mocked-integration tests, no network required.
 
 ## Setup
 
@@ -63,11 +68,13 @@ cp .env.example .env      # then fill in your keys
 ```
 
 Keys needed: `GROQ_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY` (all have free tiers).
-`LANGSMITH_*` is optional (see below).
+`LANGSMITH_*` and `SEC_USER_AGENT` are optional (see below). **SEC EDGAR needs no key or account**
+— just a `User-Agent`; set `SEC_USER_AGENT` to your own contact (SEC's fair-access policy).
 
-**Add filings**: drop 10-K / annual-report **PDFs** (or `.txt` filings from
-[SEC EDGAR](https://www.sec.gov/edgar/search/)) into `documents/`. They stay local — `.gitignore`
-keeps them out of the repo.
+**Filings**: you don't have to add anything — ask about a ticker and the agent fetches that
+company's latest 10-K from SEC EDGAR and indexes it on the fly. To *also* search your own
+documents, drop 10-K / annual-report **PDFs** or `.txt` files into `documents/` (they stay local;
+`.gitignore` keeps them out of the repo).
 
 ## Running
 

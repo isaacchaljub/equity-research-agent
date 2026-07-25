@@ -1,8 +1,9 @@
 """analyst.py — an agentic equity-research assistant (RAG over filings + live data + web + a verifier).
 
 A top-level orchestrator agent (`AnalystAgent`) answers investing questions by deciding, at run
-time, which of four tools to use:
-- search_filings   : semantic search over local filing/annual-report PDFs (FAISS).
+time, which of five tools to use:
+- fetch_filing     : download a ticker's latest 10-K from SEC EDGAR (no key/account) and index it.
+- search_filings   : semantic search over the loaded filings (FAISS).
 - get_market_data  : live quote & fundamentals for a ticker (yfinance).
 - calculator       : safe arithmetic for ratios and back-of-envelope math.
 - research_web     : delegate to a web-research sub-agent for recent news/context.
@@ -33,13 +34,16 @@ from abc import ABC
 from abc import abstractmethod
 
 import numpy as np
+import requests
 import yfinance as yf
+from bs4 import BeautifulSoup
 from crewai_tools import ScrapeWebsiteTool
 from crewai_tools import SerperDevTool
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import TextLoader
 from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
@@ -68,6 +72,10 @@ logger = logging.getLogger(__name__)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+
+SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "equity-research-agent admin@example.com")
+_SEC_HEADERS = {"User-Agent": SEC_USER_AGENT}
+_ticker_to_cik: dict[str, str] = {}
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 global_embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
@@ -517,17 +525,78 @@ def create_vector_database(documents):
 
 
 def initialize_vectorstore(documents_directory="documents"):
-    """Load all filings and build a single FAISS store."""
+    """Build a FAISS store from any local filings, or return None if the folder is empty.
+
+    Returning None (instead of raising) lets the app start with no local PDFs and pull filings on
+    demand via `fetch_filing`."""
     all_documents = load_all_documents(documents_directory)
     if not all_documents:
-        raise ValueError(
-            f"No .pdf or .txt filings found in '{documents_directory}'. Add 10-K / annual-report files there."
-        )
+        logger.info("No local filings found; starting empty (use fetch_filing to pull 10-Ks from EDGAR).")
+        return None
     return create_vector_database(all_documents)
 
 
+def _resolve_cik(ticker: str) -> str | None:
+    """Map a ticker to its zero-padded SEC CIK, caching the full ticker->CIK table after the first call."""
+    global _ticker_to_cik
+    if not _ticker_to_cik:
+        response = requests.get("https://www.sec.gov/files/company_tickers.json", headers=_SEC_HEADERS, timeout=20)
+        response.raise_for_status()
+        _ticker_to_cik = {row["ticker"].upper(): str(row["cik_str"]).zfill(10) for row in response.json().values()}
+    return _ticker_to_cik.get(ticker.upper())
+
+
+def _latest_10k(cik: str) -> dict | None:
+    """Return the most recent 10-K's accession/document/date from EDGAR's submissions feed, or None."""
+    response = requests.get(f"https://data.sec.gov/submissions/CIK{cik}.json", headers=_SEC_HEADERS, timeout=20)
+    response.raise_for_status()
+    recent = response.json()["filings"]["recent"]
+    for form, accession, document, date in zip(
+        recent["form"], recent["accessionNumber"], recent["primaryDocument"], recent["filingDate"], strict=False
+    ):
+        if form == "10-K":
+            return {"accession": accession, "document": document, "date": date}
+    return None
+
+
+def _download_filing_text(cik: str, accession: str, document: str) -> str:
+    """Download a filing's primary document and extract readable text.
+
+    Modern 10-Ks are inline-XBRL: they carry a lot of machine-readable tag metadata in hidden and
+    script/style elements. We drop those before extracting so the index holds prose, not XBRL noise."""
+    url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession.replace('-', '')}/{document}"
+    response = requests.get(url, headers=_SEC_HEADERS, timeout=60)
+    response.raise_for_status()
+    soup = BeautifulSoup(response.content, "html.parser")
+    for tag in soup(["script", "style"]):
+        tag.decompose()
+    for hidden in soup.select('[style*="display:none"], [style*="display: none"]'):
+        hidden.decompose()
+    return soup.get_text(" ", strip=True)
+
+
+def fetch_10k_chunks(ticker: str) -> tuple[list[Document], str]:
+    """Fetch a ticker's latest 10-K from EDGAR and return (chunked Documents, filing date).
+
+    Raises ValueError with a user-facing message if the ticker or filing can't be found."""
+    cik = _resolve_cik(ticker)
+    if cik is None:
+        raise ValueError(f"Ticker '{ticker}' was not found in SEC EDGAR.")
+    filing = _latest_10k(cik)
+    if filing is None:
+        raise ValueError(f"No 10-K filing found for {ticker.upper()} on SEC EDGAR.")
+    text = _download_filing_text(cik, filing["accession"], filing["document"])
+    document = Document(page_content=text, metadata={"ticker": ticker.upper(), "form": "10-K", "filed": filing["date"]})
+    chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents([document])
+    return chunks, filing["date"]
+
+
 class _SearchFilingsInput(BaseModel):
-    query: str = Field(description="A focused search query for the local filing knowledge base.")
+    query: str = Field(description="A focused search query for the loaded filings knowledge base.")
+
+
+class _FetchFilingInput(BaseModel):
+    ticker: str = Field(description="Ticker whose latest annual report (10-K) to pull from SEC EDGAR, e.g. AAPL.")
 
 
 class _MarketDataInput(BaseModel):
@@ -544,15 +613,17 @@ class _ResearchWebInput(BaseModel):
 
 _ANALYST_SYSTEM_PROMPT = """You are an equity-research analyst assistant having a conversation with the user.
 
-You have four tools:
-- search_filings: semantic search over the local filing/annual-report knowledge base (fundamentals, risks, strategy).
+You have five tools:
+- fetch_filing: download a company's latest annual report (10-K) from SEC EDGAR by ticker and index it for search.
+- search_filings: semantic search over the filings you have loaded (fundamentals, risks, strategy, segments).
 - get_market_data: live price and headline fundamentals (P/E, market cap, 52-week range, ...) for a ticker.
 - calculator: evaluate an arithmetic expression (use it for any ratio or growth-rate math — do not do arithmetic in your head).
 - research_web: delegate to a web-research agent for recent news or anything the filings and market data do not cover.
 
 How to work:
-1. Decide which tools the question needs. Use search_filings for qualitative/fundamental questions, get_market_data
-   for current numbers, calculator for any computation, and research_web only for recent news or gaps.
+1. If the question is about a company whose 10-K you have not loaded yet, call fetch_filing(ticker) first, then use
+   search_filings to read the relevant parts. Use get_market_data for current numbers, calculator for any computation,
+   and research_web only for recent news or gaps.
 2. Ground every factual or numeric claim in a tool result — a downstream verifier will check your answer against the
    exact evidence the tools returned, so do not state figures the tools did not give you.
 3. When you have enough information, write your final answer as a normal message with no tool call.
@@ -568,7 +639,7 @@ class AnalystAgent(BaseAgent):
     research to answer investing questions. Ends when it stops calling tools and answers in text
     (so `final_tool_names` is empty)."""
 
-    def __init__(self, vector_db: FAISS) -> None:
+    def __init__(self, vector_db: FAISS | None = None) -> None:
         self.vector_db = vector_db
         super().__init__(
             llm=orchestrator_llm,
@@ -587,9 +658,15 @@ class AnalystAgent(BaseAgent):
     def _build_tools(self) -> list[BaseTool]:
         return [
             StructuredTool.from_function(
+                func=self._fetch_filing,
+                name="fetch_filing",
+                description="Download a company's latest 10-K from SEC EDGAR by ticker and index it so search_filings can read it.",
+                args_schema=_FetchFilingInput,
+            ),
+            StructuredTool.from_function(
                 func=self._search_filings,
                 name="search_filings",
-                description="Search the local filing knowledge base and return the most relevant passages.",
+                description="Search the loaded filings and return the most relevant passages. Call fetch_filing first if the company isn't loaded.",
                 args_schema=_SearchFilingsInput,
             ),
             StructuredTool.from_function(
@@ -613,10 +690,29 @@ class AnalystAgent(BaseAgent):
         ]
 
     def _search_filings(self, query: str) -> str:
+        if self.vector_db is None:
+            return "No filings are loaded yet. Call fetch_filing(ticker) to download a company's 10-K first."
         docs = self.vector_db.similarity_search(query, k=5)
         if not docs:
-            return "No relevant passages found in the local filings."
+            return "No relevant passages found in the loaded filings."
         return "\n\n".join(doc.page_content for doc in docs)[:_MAX_FILINGS_CHARS]
+
+    def _fetch_filing(self, ticker: str) -> str:
+        try:
+            chunks, filed = fetch_10k_chunks(ticker)
+        except ValueError as e:
+            return str(e)
+        except Exception as e:
+            logger.warning("EDGAR fetch failed for %s: %s", ticker, e)
+            return f"Could not fetch the 10-K for '{ticker}': {e}"
+        if self.vector_db is None:
+            self.vector_db = FAISS.from_documents(chunks, global_embeddings)
+        else:
+            self.vector_db.add_documents(chunks)
+        return (
+            f"Loaded {ticker.upper()} 10-K (filed {filed}) — {len(chunks)} sections indexed. "
+            "Now call search_filings to read specific parts (risk factors, MD&A, segments, ...)."
+        )
 
     def _research_web(self, query: str) -> str:
         return WebResearchAgent().run(f"Research and answer this question: {query}")

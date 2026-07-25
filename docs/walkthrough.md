@@ -18,7 +18,8 @@ There are **three agents**, all built on one engine (`BaseAgent`):
 
 ```
 AnalystAgent (orchestrator)         ← decides which tools to use, writes the answer
-  ├── tool: search_filings           → FAISS similarity search over your filing PDFs (not an agent)
+  ├── tool: fetch_filing             → downloads a ticker's latest 10-K from SEC EDGAR + indexes it
+  ├── tool: search_filings           → FAISS similarity search over loaded filings (not an agent)
   ├── tool: get_market_data          → live quote & fundamentals via yfinance (not an agent)
   ├── tool: calculator               → safe arithmetic (not an agent)
   └── tool: research_web             → runs WebResearchAgent (an agent, used as a tool)
@@ -312,17 +313,27 @@ The **semantic cache** (`check_cache`/`update_cache`) stores `(embedding, query,
 returns a cached answer when a new query's embedding is >0.85 cosine-similar to a past one — an
 *answer-level* shortcut, separate from context management. The **vector store**
 (`load_all_documents` → `create_vector_database` → `initialize_vectorstore`) loads every `.pdf` and
-`.txt` filing, chunks them (~1000 chars, 200 overlap), embeds, and indexes in FAISS. It raises early
-if the folder is empty.
+`.txt` filing, chunks them (~1000 chars, 200 overlap), embeds, and indexes in FAISS.
+`initialize_vectorstore` returns **None** when the folder is empty (instead of raising), so the app
+can start with no local files and pull filings on demand.
+
+**EDGAR fetch** (`fetch_filing` → `fetch_10k_chunks` → `_resolve_cik`/`_latest_10k`/
+`_download_filing_text`): resolves a ticker to its SEC CIK (cached), finds the latest 10-K in the
+submissions feed, downloads the primary document, and strips hidden/inline-XBRL noise before
+extracting prose. The `_fetch_filing` tool then indexes those chunks — creating the FAISS store if it
+was `None`, else adding to it — so `search_filings` can read them. This is what lets you research a
+company from just a ticker; no PDF hunting.
 
 ### 2.10 `AnalystAgent` — the orchestrator
 
-Configures the engine with **four tools** (`search_filings`, `get_market_data`, `calculator`,
-`research_web`), `final_tool_names=[]` (ends by answering in text), and `max_iter=10` (room for
-multiple tools + web). `self.vector_db` is set **before** `super().__init__` because `_build_tools`
-(called inside it) references it. `_search_filings` and `_research_web` are **bound methods** — which
-is exactly why we build tools with `StructuredTool.from_function` at instance-construction time rather
-than the `@tool` decorator (see §3). `_process_output` returns the most recent AI message with
+Configures the engine with **five tools** (`fetch_filing`, `search_filings`, `get_market_data`,
+`calculator`, `research_web`), `final_tool_names=[]` (ends by answering in text), and `max_iter=10`
+(room for fetch + multiple tools + web). `self.vector_db` (which may start `None`) is set **before**
+`super().__init__` because `_build_tools` (called inside it) references it. `_search_filings`,
+`_fetch_filing`, and `_research_web` are **bound methods** — which is exactly why we build tools with
+`StructuredTool.from_function` at instance-construction time rather than the `@tool` decorator (see
+§3). `_search_filings` returns a "call fetch_filing first" hint when nothing is loaded yet.
+`_process_output` returns the most recent AI message with
 non-empty text (so a `max_iter` stall mid-tool-call doesn't return `""`). Its prompt makes it decide
 which tools to use, **ground every claim in a tool result** (so the verifier can check it), add a
 "not financial advice" note, and end each turn by asking if you want more.
