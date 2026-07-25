@@ -16,7 +16,7 @@ Shared engine (`ResilientChat`, `BaseAgent`) is domain-agnostic: a plain `while`
 tool-bound model, with retry/backoff/fallback and a token-bounded sliding window. No graph.
 
 Model strategy (matters on free-tier keys):
-- The web sub-agent tries gemini-3-flash-preview, waits 20s then 60s on failure, then falls back
+- The web sub-agent tries gemini-flash-latest, waits 20s then 60s on failure, then falls back
   to Groq's gpt-oss-120b. The orchestrator and verifier run on gpt-oss-120b (off Gemini, so they
   don't share Gemini's request quota). Tool outputs are truncated to stay under token limits.
 
@@ -37,8 +37,6 @@ import numpy as np
 import requests
 import yfinance as yf
 from bs4 import BeautifulSoup
-from crewai_tools import ScrapeWebsiteTool
-from crewai_tools import SerperDevTool
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import TextLoader
@@ -81,7 +79,7 @@ EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 global_embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
 web_llm = ChatLiteLLM(
-    model="gemini/gemini-3-flash-preview",
+    model="gemini/gemini-flash-latest",
     temperature=0.3,
     max_tokens=2000,
     timeout=None,
@@ -281,16 +279,34 @@ class _SubmitFindingsInput(BaseModel):
     summary: str = Field(description="A thorough, self-contained summary of what you found that answers the question.")
 
 
-_serper = SerperDevTool()
-_scraper = ScrapeWebsiteTool()
+_BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/122.0 Safari/537.36 equity-research-agent"
+)
 
 
 def _web_search(search_query: str) -> str:
-    return str(_serper.run(search_query=search_query))[:_MAX_SEARCH_CHARS]
+    """Google search via the Serper API (POST) — returns the top organic results as text."""
+    response = requests.post(
+        "https://google.serper.dev/search",
+        headers={"X-API-KEY": SERPER_API_KEY or "", "Content-Type": "application/json"},
+        json={"q": search_query},
+        timeout=20,
+    )
+    response.raise_for_status()
+    results = response.json().get("organic", [])
+    rendered = [f"{r.get('title', '')} — {r.get('link', '')}\n{r.get('snippet', '')}" for r in results[:6]]
+    return ("\n\n".join(rendered) or "No results found.")[:_MAX_SEARCH_CHARS]
 
 
 def _web_scrape(website_url: str) -> str:
-    return str(_scraper.run(website_url=website_url))[:_MAX_SCRAPE_CHARS]
+    """Fetch a page and extract its visible text (scripts/nav/boilerplate stripped)."""
+    response = requests.get(website_url, headers={"User-Agent": _BROWSER_USER_AGENT}, timeout=30)
+    response.raise_for_status()
+    soup = BeautifulSoup(response.content, "html.parser")
+    for tag in soup(["script", "style", "nav", "header", "footer", "noscript"]):
+        tag.decompose()
+    return soup.get_text(" ", strip=True)[:_MAX_SCRAPE_CHARS]
 
 
 def _submit_findings(summary: str) -> str:
@@ -298,8 +314,8 @@ def _submit_findings(summary: str) -> str:
 
 
 def build_web_tools() -> list[BaseTool]:
-    """The web sub-agent's tools: search, scrape, and a terminal submit_findings. Search/scrape
-    outputs are truncated so accumulated results stay under free-tier token-per-minute ceilings."""
+    """The web sub-agent's tools: Serper search, page scrape, and a terminal submit_findings.
+    Search/scrape outputs are truncated so accumulated results stay under token-per-minute limits."""
     return [
         StructuredTool.from_function(
             func=_web_search,
@@ -726,7 +742,10 @@ def _collect_evidence(messages: list[BaseMessage]) -> str:
 
 
 def verify_answer(question: str, answer: str, analyst_messages: list[BaseMessage]) -> str:
-    """Run the verifier agent over the analyst's answer and the evidence its tools returned."""
+    """Run the verifier agent over the analyst's answer and the evidence its tools returned.
+
+    Best-effort: the answer is already produced, so a verifier failure (e.g. a rate limit) must not
+    sink the whole response — we return a "verification unavailable" note instead of raising."""
     evidence = _collect_evidence(analyst_messages)
     if not evidence:
         return "Verification: skipped (the answer used no tool evidence)."
@@ -735,7 +754,11 @@ def verify_answer(question: str, answer: str, analyst_messages: list[BaseMessage
         f"DRAFT ANSWER:\n{answer}\n\n"
         f"EVIDENCE (tool outputs the answer must be grounded in):\n{evidence}"
     )
-    return VerifierAgent().run(verifier_input)
+    try:
+        return VerifierAgent().run(verifier_input)
+    except Exception as e:
+        logger.warning("Verifier failed; returning the answer without a fact-check: %s", e)
+        return f"Verification unavailable ({e.__class__.__name__})."
 
 
 def process_query(query: str, vector_db: FAISS | None = None) -> str:

@@ -72,9 +72,9 @@ call"* while the sub-agent prompts say *"Always finish by calling submit_…"*.
 
 Standard library: `ast`/`operator` (the safe calculator), `logging`, `os`, `time` (retry backoff),
 `abc` (abstract base class). Third-party: `numpy` (cosine similarity for the cache), `yfinance`
-(market data), `crewai_tools` (Serper search + scraping), `dotenv`, `langchain_*` (models,
-messages, tools, splitters, FAISS, embeddings), `langsmith` (`traceable`), `pydantic` (tool arg
-schemas).
+(market data), `requests` + `beautifulsoup4` (EDGAR + web search/scrape), `dotenv`, `langchain_*`
+(models, messages, tools, splitters, FAISS, embeddings), `langsmith` (`traceable`), `pydantic`
+(tool arg schemas).
 
 ```python
 load_dotenv()
@@ -87,7 +87,7 @@ FAISS indexing and the semantic cache).
 
 **Three models, chosen deliberately:**
 ```python
-web_llm          = ChatLiteLLM(model="gemini/gemini-3-flash-preview", ..., max_retries=0)  # web primary
+web_llm          = ChatLiteLLM(model="gemini/gemini-flash-latest", ..., max_retries=0)  # web primary
 web_backup_llm   = ChatGroq(model="openai/gpt-oss-120b", ..., max_retries=0)               # web fallback
 orchestrator_llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0, ..., max_retries=0) # analyst + verifier
 ```
@@ -245,8 +245,9 @@ across the many turns of a conversation.
 ### 2.5 Web tools + `WebResearchAgent`
 
 Truncation caps (`_MAX_SEARCH_CHARS`, `_MAX_SCRAPE_CHARS`) keep tool outputs small — a full scraped
-page can blow past a model's per-minute token limit. `_web_search`/`_web_scrape` wrap the CrewAI
-tools and truncate; `_submit_findings` is the **terminal tool** whose returned `summary` becomes the
+page can blow past a model's per-minute token limit. `_web_search` calls the Serper API directly
+(`requests.post`) and `_web_scrape` fetches + extracts text with BeautifulSoup, both truncated;
+`_submit_findings` is the **terminal tool** whose returned `summary` becomes the
 agent's output. `WebResearchAgent` configures the engine with the web tools, `final_tool_names=
 ["submit_findings"]`, Gemini primary + Groq backup, and the **`(20, 60)`** wait schedule. Its
 `_process_output` returns the `submit_findings` payload (or the last text as a fallback). The tool is
