@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+.DS_Store
+*.egg-info/
+
+documents/*.pdf
+documents/*.txt
+!documents/.gitkeep
