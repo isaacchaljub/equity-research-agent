@@ -35,6 +35,7 @@ from abc import abstractmethod
 
 import numpy as np
 import requests
+import sentry_sdk
 import yfinance as yf
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -62,10 +63,30 @@ from numpy import dot
 from numpy.linalg import norm
 from pydantic import BaseModel
 from pydantic import Field
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+def setup_sentry() -> None:
+    """Initialize Sentry if SENTRY_DSN is set (else a no-op, so local runs and tests need nothing).
+
+    With LoggingIntegration, any ERROR-level log — notably `logger.exception(...)` — auto-reports as
+    a Sentry event, and unhandled exceptions (incl. FastAPI request context) are captured too. Errors
+    only: performance tracing is left to LangSmith, so traces_sample_rate is 0."""
+    dsn = os.getenv("SENTRY_DSN")
+    if not dsn:
+        return
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=os.getenv("SENTRY_ENVIRONMENT", "development"),
+        send_default_pii=True,
+        traces_sample_rate=0.0,
+        integrations=[LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)],
+    )
+    logger.info("Sentry initialized")
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -792,6 +813,7 @@ def chat(documents_directory: str = "documents") -> None:
     """Interactive, event-driven analyst. One AnalystAgent persists for the session, so history
     carries across turns; each answer is fact-checked before it is shown."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    setup_sentry()
     vector_db = initialize_vectorstore(documents_directory)
     analyst = AnalystAgent(vector_db)
     print("Equity-research analyst ready. Ask about a company or filing, or type 'exit'.")
@@ -809,6 +831,7 @@ def chat(documents_directory: str = "documents") -> None:
 def main():
     """Answer a single hardcoded question (non-interactive)."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    setup_sentry()
     vector_db = initialize_vectorstore("documents")
     query = "What are the main risk factors, and how does the current P/E compare to the 52-week range?"
     print(process_query(query, vector_db))

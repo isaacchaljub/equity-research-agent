@@ -30,9 +30,11 @@ from pydantic import Field
 from pipeline.analyst import AnalystAgent
 from pipeline.analyst import initialize_vectorstore
 from pipeline.analyst import process_query
+from pipeline.analyst import setup_sentry
 from pipeline.analyst import verify_answer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+setup_sentry()
 logger = getLogger(__name__)
 
 _agents: dict[str, AnalystAgent] = {}
