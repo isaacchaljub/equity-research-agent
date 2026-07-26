@@ -173,6 +173,12 @@ pipeline/
 serving_api/main.py FastAPI service    ·    app/main.py Streamlit UI    ·    deploy/ cloud scripts
 ```
 
+## How it works (deep dive)
+
+See [`docs/walkthrough.md`](docs/walkthrough.md) for a thorough, section-by-section explanation of
+the code — the agent loop, the two termination modes, the resilience layer, the sliding window,
+the nested-agent pattern, and the verifier.
+
 ## Disclaimer
 
 This is a portfolio/educational project that demonstrates agentic architecture. It is **not
