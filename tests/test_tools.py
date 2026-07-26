@@ -47,10 +47,12 @@ def test_market_data_handles_lookup_error(mock_ticker):
 @patch("pipeline.tools.requests.post")
 def test_web_search_renders_organic_results(mock_post):
     mock_post.return_value.raise_for_status.return_value = None
-    mock_post.return_value.json.return_value = {"organic": [
-        {"title": "Apple Q4 results", "link": "https://example.com/a", "snippet": "Revenue up 5%."},
-        {"title": "AAPL analysis", "link": "https://example.com/b", "snippet": "Margins improved."},
-    ]}
+    mock_post.return_value.json.return_value = {
+        "organic": [
+            {"title": "Apple Q4 results", "link": "https://example.com/a", "snippet": "Revenue up 5%."},
+            {"title": "AAPL analysis", "link": "https://example.com/b", "snippet": "Margins improved."},
+        ]
+    }
     out = _web_search("apple earnings")
     assert "Apple Q4 results" in out
     assert "https://example.com/a" in out

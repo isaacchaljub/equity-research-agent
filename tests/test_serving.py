@@ -33,8 +33,10 @@ def test_chat_returns_answer_and_verification(_mock_init, mock_agent_cls, _mock_
 
 @patch("serving_api.main.initialize_vectorstore", return_value=MagicMock())
 def test_same_conversation_id_reuses_agent(_mock_init):
-    with patch("serving_api.main.AnalystAgent") as mock_agent_cls, \
-         patch("serving_api.main.verify_answer", return_value="Verification: supported"):
+    with (
+        patch("serving_api.main.AnalystAgent") as mock_agent_cls,
+        patch("serving_api.main.verify_answer", return_value="Verification: supported"),
+    ):
         mock_agent_cls.return_value.run.return_value = "answer"
         mock_agent_cls.return_value.messages = []
         with TestClient(app) as client:

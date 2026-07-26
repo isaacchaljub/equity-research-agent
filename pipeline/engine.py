@@ -48,7 +48,9 @@ class ResilientChat:
         self.backup_retries = backup_retries
         self._use_backup = False
 
-    @traceable(run_type="llm", name="model", process_inputs=lambda inputs: {k: v for k, v in inputs.items() if k != "self"})
+    @traceable(
+        run_type="llm", name="model", process_inputs=lambda inputs: {k: v for k, v in inputs.items() if k != "self"}
+    )
     def invoke(self, messages: list[BaseMessage]) -> AIMessage:
         last_error: Exception | None = None
         if not self._use_backup:
@@ -61,7 +63,10 @@ class ResilientChat:
                         wait = self.retry_waits[i]
                         logger.warning(
                             "Primary model failed (%s); retry %d/%d in %ds",
-                            e.__class__.__name__, i + 1, len(self.retry_waits), wait,
+                            e.__class__.__name__,
+                            i + 1,
+                            len(self.retry_waits),
+                            wait,
                         )
                         time.sleep(wait)
             if self.backup is None:
@@ -153,7 +158,7 @@ class BaseAgent(ABC):
             if selected_tool is None:
                 self.messages.append(
                     ToolMessage(
-                        content=f'Unknown tool {tool_call["name"]}; pick one of {list(self.tools)}.',
+                        content=f"Unknown tool {tool_call['name']}; pick one of {list(self.tools)}.",
                         tool_call_id=tool_call["id"],
                         name=tool_call["name"],
                     )
@@ -163,7 +168,7 @@ class BaseAgent(ABC):
                 tool_msg = selected_tool.invoke(tool_call)
             except Exception as e:
                 tool_msg = ToolMessage(
-                    content=f'Error calling {tool_call["name"]}: {e}',
+                    content=f"Error calling {tool_call['name']}: {e}",
                     tool_call_id=tool_call["id"],
                     name=tool_call["name"],
                     status="error",

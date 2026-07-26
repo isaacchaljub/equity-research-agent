@@ -26,10 +26,12 @@ def _fake_vector_db(passage):
 def test_analyst_searches_filings_then_answers(scripted_chat):
     vdb = _fake_vector_db("Apple's trailing P/E is 31.5 according to the filing.")
     analyst = AnalystAgent(vdb)
-    analyst.llm = scripted_chat([
-        AIMessage(content="", tool_calls=[_tool_call("search_filings", {"query": "P/E"})]),
-        AIMessage(content="Apple's trailing P/E is 31.5. Educational, not financial advice."),
-    ])
+    analyst.llm = scripted_chat(
+        [
+            AIMessage(content="", tool_calls=[_tool_call("search_filings", {"query": "P/E"})]),
+            AIMessage(content="Apple's trailing P/E is 31.5. Educational, not financial advice."),
+        ]
+    )
 
     answer = analyst.run("What is Apple's P/E?")
 
@@ -40,12 +42,19 @@ def test_analyst_searches_filings_then_answers(scripted_chat):
 
 def test_verifier_returns_verdict_from_terminal_tool(scripted_chat):
     verifier = VerifierAgent()
-    verifier.llm = scripted_chat([
-        AIMessage(content="", tool_calls=[_tool_call(
-            "submit_verdict",
-            {"verdict": "supported: the P/E matches the filing", "unsupported_claims": []},
-        )]),
-    ])
+    verifier.llm = scripted_chat(
+        [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    _tool_call(
+                        "submit_verdict",
+                        {"verdict": "supported: the P/E matches the filing", "unsupported_claims": []},
+                    )
+                ],
+            ),
+        ]
+    )
     verdict = verifier.run("QUESTION ... DRAFT ... EVIDENCE: trailing P/E 31.5")
     assert verdict.startswith("Verification: supported")
 

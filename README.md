@@ -1,5 +1,7 @@
 # 📈 Equity Research Agent
 
+[![CI](https://github.com/isaacchaljub/equity-research-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/isaacchaljub/equity-research-agent/actions/workflows/ci.yml)
+
 An **agentic** equity-research assistant. Ask an investing question in plain English and a
 language model decides — at run time — how to answer it: pull a company's actual **10-K from SEC
 EDGAR** by ticker, search those **filings**, pull **live market data**, do the **math**, or go to
@@ -63,7 +65,8 @@ window; each agent just supplies tools and a prompt.
 - **Bounded context**: a sliding window keeps token cost flat as conversations grow.
 - **Three ways to use it**: interactive CLI, FastAPI service, and a Streamlit chat UI.
 - **Traced**: drop in a LangSmith key and every run shows up as a nested trace.
-- **Tested**: 33 unit + mocked-integration tests, no network required.
+- **Tested & linted in CI**: 35 unit + mocked-integration tests (no network required), plus ruff
+  lint/format, run on every push and PR via GitHub Actions.
 
 ## Setup
 
@@ -169,12 +172,6 @@ pipeline/
   service.py        the pipeline + CLI entrypoints
 serving_api/main.py FastAPI service    ·    app/main.py Streamlit UI    ·    deploy/ cloud scripts
 ```
-
-## How it works (deep dive)
-
-See [`docs/walkthrough.md`](docs/walkthrough.md) for a thorough, section-by-section explanation of
-the code — the agent loop, the two termination modes, the resilience layer, the sliding window,
-the nested-agent pattern, and the verifier.
 
 ## Disclaimer
 

@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         ready = False
         logger.error("Failed to initialize the vector store: %s", e)
-        raise Exception(f"Failed to initialize the vector store: {e}")
+        raise RuntimeError(f"Failed to initialize the vector store: {e}") from e
 
     yield
 
@@ -125,7 +125,7 @@ async def chat(req: ChatRequest):
 
     except Exception as e:
         logger.error("Error in chat: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/query")
@@ -137,7 +137,7 @@ async def answer_query(req: QueryRequest):
 
     except Exception as e:
         logger.error("Error answering query: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.exception_handler(HTTPException)

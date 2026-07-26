@@ -16,7 +16,9 @@ API_URL = "http://localhost:8000"
 
 st.set_page_config(page_title="Equity Research Agent", page_icon="📈")
 st.title("📈 Equity Research Agent")
-st.caption("RAG over filings + live market data + web news, with a fact-checking verifier. Educational, not financial advice.")
+st.caption(
+    "RAG over filings + live market data + web news, with a fact-checking verifier. Educational, not financial advice."
+)
 
 if "conversation_id" not in st.session_state:
     st.session_state.conversation_id = None

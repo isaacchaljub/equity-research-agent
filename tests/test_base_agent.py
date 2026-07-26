@@ -56,20 +56,24 @@ def test_run_stops_when_model_answers_in_text(scripted_chat):
 
 def test_run_executes_tool_then_answers(scripted_chat):
     agent = _agent()
-    agent.llm = scripted_chat([
-        AIMessage(content="", tool_calls=[_tool_call("echo", "hi")]),
-        AIMessage(content="done"),
-    ])
+    agent.llm = scripted_chat(
+        [
+            AIMessage(content="", tool_calls=[_tool_call("echo", "hi")]),
+            AIMessage(content="done"),
+        ]
+    )
     assert agent.run("q") == "done"
     assert any(isinstance(m, ToolMessage) and m.content == "echo:hi" for m in agent.messages)
 
 
 def test_terminal_tool_ends_loop(scripted_chat):
     agent = _agent(final_tool_names=["finish"])
-    agent.llm = scripted_chat([
-        AIMessage(content="", tool_calls=[_tool_call("finish", "payload")]),
-        AIMessage(content="should never run"),
-    ])
+    agent.llm = scripted_chat(
+        [
+            AIMessage(content="", tool_calls=[_tool_call("finish", "payload")]),
+            AIMessage(content="should never run"),
+        ]
+    )
     agent.run("q")
     assert agent._final_payload == "final:payload"
     assert agent.llm.calls == 1
@@ -77,10 +81,12 @@ def test_terminal_tool_ends_loop(scripted_chat):
 
 def test_unknown_tool_is_reported_not_fatal(scripted_chat):
     agent = _agent()
-    agent.llm = scripted_chat([
-        AIMessage(content="", tool_calls=[_tool_call("nope", "x")]),
-        AIMessage(content="recovered"),
-    ])
+    agent.llm = scripted_chat(
+        [
+            AIMessage(content="", tool_calls=[_tool_call("nope", "x")]),
+            AIMessage(content="recovered"),
+        ]
+    )
     assert agent.run("q") == "recovered"
     assert any(isinstance(m, ToolMessage) and "Unknown tool" in m.content for m in agent.messages)
 

@@ -3,9 +3,9 @@ from unittest.mock import patch
 
 import pipeline.retrieval as retrieval
 from pipeline.agents import AnalystAgent
-from pipeline.retrieval import fetch_10k_chunks
 from pipeline.retrieval import _latest_10k
 from pipeline.retrieval import _resolve_cik
+from pipeline.retrieval import fetch_10k_chunks
 
 
 def _resp(json_data=None, content=b""):
@@ -20,13 +20,21 @@ def _fake_get(url, **kwargs):
     if "company_tickers.json" in url:
         return _resp(json_data={"0": {"ticker": "AAPL", "cik_str": 320193}})
     if "submissions/CIK" in url:
-        return _resp(json_data={"filings": {"recent": {
-            "form": ["8-K", "10-K"],
-            "accessionNumber": ["0000320193-24-000099", "0000320193-24-000123"],
-            "primaryDocument": ["a8k.htm", "aapl-20240928.htm"],
-            "filingDate": ["2024-10-01", "2024-11-01"],
-        }}})
-    return _resp(content=b"<html><body><h1>Risk Factors</h1><p>Competition is intense. Revenue was $383B.</p></body></html>")
+        return _resp(
+            json_data={
+                "filings": {
+                    "recent": {
+                        "form": ["8-K", "10-K"],
+                        "accessionNumber": ["0000320193-24-000099", "0000320193-24-000123"],
+                        "primaryDocument": ["a8k.htm", "aapl-20240928.htm"],
+                        "filingDate": ["2024-10-01", "2024-11-01"],
+                    }
+                }
+            }
+        )
+    return _resp(
+        content=b"<html><body><h1>Risk Factors</h1><p>Competition is intense. Revenue was $383B.</p></body></html>"
+    )
 
 
 def setup_function():

@@ -20,12 +20,12 @@ from pipeline.config import web_backup_llm
 from pipeline.config import web_llm
 from pipeline.engine import BaseAgent
 from pipeline.retrieval import fetch_10k_chunks
-from pipeline.tools import _CalculatorInput
-from pipeline.tools import _MarketDataInput
-from pipeline.tools import _VerdictInput
 from pipeline.tools import _calculator
+from pipeline.tools import _CalculatorInput
 from pipeline.tools import _get_market_data
+from pipeline.tools import _MarketDataInput
 from pipeline.tools import _submit_verdict
+from pipeline.tools import _VerdictInput
 from pipeline.tools import build_web_tools
 
 logger = structlog.get_logger(__name__)
