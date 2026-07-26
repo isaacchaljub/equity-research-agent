@@ -4,11 +4,11 @@ from unittest.mock import patch
 from langchain_core.messages import AIMessage
 from langchain_core.messages import ToolMessage
 
-from pipeline.analyst import AnalystAgent
-from pipeline.analyst import VerifierAgent
-from pipeline.analyst import _collect_evidence
-from pipeline.analyst import process_query
-from pipeline.analyst import query_cache
+from pipeline.agents import AnalystAgent
+from pipeline.agents import VerifierAgent
+from pipeline.retrieval import query_cache
+from pipeline.service import _collect_evidence
+from pipeline.service import process_query
 
 
 def _tool_call(name, args, call_id="1"):
@@ -50,8 +50,8 @@ def test_verifier_returns_verdict_from_terminal_tool(scripted_chat):
     assert verdict.startswith("Verification: supported")
 
 
-@patch("pipeline.analyst.VerifierAgent")
-@patch("pipeline.analyst.AnalystAgent")
+@patch("pipeline.service.VerifierAgent")
+@patch("pipeline.service.AnalystAgent")
 def test_process_query_glues_answer_and_verdict(mock_analyst_cls, mock_verifier_cls):
     query_cache.clear()
     analyst_instance = mock_analyst_cls.return_value

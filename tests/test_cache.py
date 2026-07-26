@@ -1,7 +1,7 @@
-from pipeline.analyst import check_cache
-from pipeline.analyst import max_cache_size
-from pipeline.analyst import query_cache
-from pipeline.analyst import update_cache
+from pipeline.config import MAX_CACHE_SIZE
+from pipeline.retrieval import check_cache
+from pipeline.retrieval import query_cache
+from pipeline.retrieval import update_cache
 
 
 def setup_function():
@@ -27,6 +27,6 @@ def test_unrelated_query_misses():
 
 
 def test_cache_evicts_oldest_over_capacity():
-    for i in range(max_cache_size + 5):
+    for i in range(MAX_CACHE_SIZE + 5):
         update_cache(f"unique question number {i}", f"answer {i}")
-    assert len(query_cache) == max_cache_size
+    assert len(query_cache) == MAX_CACHE_SIZE

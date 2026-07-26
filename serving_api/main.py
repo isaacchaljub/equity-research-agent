@@ -14,12 +14,11 @@ workers.
 """
 
 import asyncio
-import logging
 import uuid
 from contextlib import asynccontextmanager
-from logging import getLogger
 from pathlib import Path
 
+import structlog
 from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi import Request
@@ -27,15 +26,16 @@ from fastapi import Response
 from pydantic import BaseModel
 from pydantic import Field
 
-from pipeline.analyst import AnalystAgent
-from pipeline.analyst import initialize_vectorstore
-from pipeline.analyst import process_query
-from pipeline.analyst import setup_sentry
-from pipeline.analyst import verify_answer
+from pipeline.agents import AnalystAgent
+from pipeline.observability import setup_logging
+from pipeline.observability import setup_sentry
+from pipeline.retrieval import initialize_vectorstore
+from pipeline.service import process_query
+from pipeline.service import verify_answer
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+setup_logging()
 setup_sentry()
-logger = getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _agents: dict[str, AnalystAgent] = {}
 _locks: dict[str, asyncio.Lock] = {}

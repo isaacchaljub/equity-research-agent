@@ -1,6 +1,6 @@
 import pytest
 
-from pipeline.analyst import ResilientChat
+from pipeline.engine import ResilientChat
 
 
 class _Fail:

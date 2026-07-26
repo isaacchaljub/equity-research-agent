@@ -1,9 +1,9 @@
 from unittest.mock import patch
 
-from pipeline.analyst import _calculator
-from pipeline.analyst import _get_market_data
-from pipeline.analyst import _web_scrape
-from pipeline.analyst import _web_search
+from pipeline.tools import _calculator
+from pipeline.tools import _get_market_data
+from pipeline.tools import _web_scrape
+from pipeline.tools import _web_search
 
 
 def test_calculator_arithmetic():
@@ -16,7 +16,7 @@ def test_calculator_rejects_non_arithmetic():
     assert "Could not evaluate" in _calculator("price * 2")
 
 
-@patch("pipeline.analyst.yf.Ticker")
+@patch("pipeline.tools.yf.Ticker")
 def test_market_data_formats_fields(mock_ticker):
     mock_ticker.return_value.info = {
         "shortName": "Apple Inc.",
@@ -32,19 +32,19 @@ def test_market_data_formats_fields(mock_ticker):
     assert "Market cap: 3,000,000,000,000" in out
 
 
-@patch("pipeline.analyst.yf.Ticker")
+@patch("pipeline.tools.yf.Ticker")
 def test_market_data_handles_unknown_ticker(mock_ticker):
     mock_ticker.return_value.info = {}
     assert "No market data" in _get_market_data("ZZZZ")
 
 
-@patch("pipeline.analyst.yf.Ticker")
+@patch("pipeline.tools.yf.Ticker")
 def test_market_data_handles_lookup_error(mock_ticker):
     mock_ticker.side_effect = RuntimeError("network down")
     assert "Could not fetch market data" in _get_market_data("AAPL")
 
 
-@patch("pipeline.analyst.requests.post")
+@patch("pipeline.tools.requests.post")
 def test_web_search_renders_organic_results(mock_post):
     mock_post.return_value.raise_for_status.return_value = None
     mock_post.return_value.json.return_value = {"organic": [
@@ -57,7 +57,7 @@ def test_web_search_renders_organic_results(mock_post):
     assert "Revenue up 5%." in out
 
 
-@patch("pipeline.analyst.requests.get")
+@patch("pipeline.tools.requests.get")
 def test_web_scrape_extracts_visible_text(mock_get):
     mock_get.return_value.raise_for_status.return_value = None
     mock_get.return_value.content = (

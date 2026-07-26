@@ -1,11 +1,11 @@
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-import pipeline.analyst as analyst
-from pipeline.analyst import AnalystAgent
-from pipeline.analyst import fetch_10k_chunks
-from pipeline.analyst import _latest_10k
-from pipeline.analyst import _resolve_cik
+import pipeline.retrieval as retrieval
+from pipeline.agents import AnalystAgent
+from pipeline.retrieval import fetch_10k_chunks
+from pipeline.retrieval import _latest_10k
+from pipeline.retrieval import _resolve_cik
 
 
 def _resp(json_data=None, content=b""):
@@ -30,24 +30,24 @@ def _fake_get(url, **kwargs):
 
 
 def setup_function():
-    analyst._ticker_to_cik = {}
+    retrieval._ticker_to_cik = {}
 
 
 def test_resolve_cik():
-    with patch("pipeline.analyst.requests.get", side_effect=_fake_get):
+    with patch("pipeline.retrieval.requests.get", side_effect=_fake_get):
         assert _resolve_cik("aapl") == "0000320193"
         assert _resolve_cik("ZZZZ") is None
 
 
 def test_latest_10k_skips_other_forms():
-    with patch("pipeline.analyst.requests.get", side_effect=_fake_get):
+    with patch("pipeline.retrieval.requests.get", side_effect=_fake_get):
         filing = _latest_10k("0000320193")
         assert filing["accession"] == "0000320193-24-000123"
         assert filing["date"] == "2024-11-01"
 
 
 def test_fetch_10k_chunks_extracts_text():
-    with patch("pipeline.analyst.requests.get", side_effect=_fake_get):
+    with patch("pipeline.retrieval.requests.get", side_effect=_fake_get):
         chunks, filed = fetch_10k_chunks("AAPL")
         assert filed == "2024-11-01"
         assert chunks
@@ -57,7 +57,7 @@ def test_fetch_10k_chunks_extracts_text():
 def test_fetch_filing_tool_indexes_into_agent():
     agent = AnalystAgent()
     assert agent.vector_db is None
-    with patch("pipeline.analyst.requests.get", side_effect=_fake_get):
+    with patch("pipeline.retrieval.requests.get", side_effect=_fake_get):
         message = agent._fetch_filing("AAPL")
     assert "Loaded AAPL 10-K" in message
     assert agent.vector_db is not None
@@ -66,7 +66,7 @@ def test_fetch_filing_tool_indexes_into_agent():
 
 def test_fetch_filing_unknown_ticker_is_graceful():
     agent = AnalystAgent()
-    with patch("pipeline.analyst.requests.get", side_effect=_fake_get):
+    with patch("pipeline.retrieval.requests.get", side_effect=_fake_get):
         assert "not found" in agent._fetch_filing("ZZZZ").lower()
 
 

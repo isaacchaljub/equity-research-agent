@@ -5,8 +5,8 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel
 from pydantic import Field
 
-from pipeline.analyst import BaseAgent
-from pipeline.analyst import orchestrator_llm
+from pipeline.config import orchestrator_llm
+from pipeline.engine import BaseAgent
 
 
 class _EchoInput(BaseModel):
