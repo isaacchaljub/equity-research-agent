@@ -80,7 +80,7 @@ documents, drop 10-K / annual-report **PDFs** or `.txt` files into `documents/` 
 
 **Interactive CLI**
 ```bash
-uv run python pipeline/analyst.py
+uv run equity-research          # console script (or: uv run python -m pipeline.service)
 ```
 
 **FastAPI service**
@@ -123,6 +123,45 @@ uv run pytest
 All tests mock the models and network, so they're fast and offline: `ResilientChat` retry/
 fallback, the sliding window, the agent loop, tool dispatch, the tools, the cache, and a mocked
 end-to-end analyst → verifier flow.
+
+## Deployment
+
+The service is containerized (multi-stage, CPU-only, non-root, embedding model baked in) and ships
+with one-command deploy/teardown scripts for **AWS** and **Azure**.
+
+```bash
+docker build -t equity-research-agent .          # build
+docker run -p 8000:8000 --env-file .env equity-research-agent
+```
+
+**AWS — ECS Fargate** (ECR + CloudWatch + Secrets Manager + IAM + Fargate):
+```bash
+./deploy/aws_deploy.sh        # build+push, provision, run; prints the public URL
+./deploy/aws_teardown.sh      # stops billing
+```
+
+**Azure — Container Apps** (ACR + Key Vault + managed identity, HTTPS ingress):
+```bash
+./deploy/azure_deploy.sh      # build+push, provision, run; prints the HTTPS URL
+./deploy/azure_teardown.sh    # deletes the resource group
+```
+Both read the keys from `.env` (into Secrets Manager / Key Vault — never baked into the image) and
+pick up `SENTRY_DSN` / `LANGSMITH_*` automatically if present. Requires `aws`/`az` CLI logged in and
+Docker with buildx.
+
+## Project structure
+
+```
+pipeline/
+  config.py         settings: keys, model clients, tunable constants
+  observability.py  structlog logging + Sentry setup
+  engine.py         ResilientChat + BaseAgent (the reusable agent framework)
+  tools.py          web search/scrape, calculator, market data, terminal tools
+  retrieval.py      semantic cache, FAISS store, SEC EDGAR fetch
+  agents.py         WebResearchAgent, VerifierAgent, AnalystAgent
+  service.py        the pipeline + CLI entrypoints
+serving_api/main.py FastAPI service    ·    app/main.py Streamlit UI    ·    deploy/ cloud scripts
+```
 
 ## How it works (deep dive)
 

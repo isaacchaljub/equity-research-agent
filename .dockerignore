@@ -1,0 +1,18 @@
+# Keep the build context (and image) small — exclude everything the runtime doesn't need.
+.git
+.gitignore
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.env
+.DS_Store
+tests
+docs
+deploy
+app
+README.md
+*.md
+documents/*.pdf
+documents/*.txt
