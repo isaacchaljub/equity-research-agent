@@ -34,7 +34,14 @@ flowchart TD
     M -.evidence.-> V
     C -.evidence.-> V
     W -.evidence.-> V
-    V --> R[Answer + verification]
+    V --> R[✓ Verified answer]
+
+    classDef agent stroke:#2FD6A6,stroke-width:2px;
+    classDef web stroke:#63ADEB,stroke-width:2px;
+    classDef verify stroke:#F0B95E,stroke-width:2px;
+    class A,R agent;
+    class W,WS web;
+    class V verify;
 ```
 
 **Two agents, one engine.** The `AnalystAgent` orchestrator and the nested `WebResearchAgent`
