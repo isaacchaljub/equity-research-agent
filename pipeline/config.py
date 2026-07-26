@@ -20,7 +20,11 @@ SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "equity-research-agent admin@exampl
 SEC_HEADERS = {"User-Agent": SEC_USER_AGENT}
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-global_embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+EMBEDDING_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+global_embeddings = HuggingFaceEmbeddings(
+    model_name=EMBEDDING_MODEL,
+    model_kwargs={"revision": EMBEDDING_REVISION},
+)
 
 MAX_SEARCH_CHARS = 2000
 MAX_SCRAPE_CHARS = 3000

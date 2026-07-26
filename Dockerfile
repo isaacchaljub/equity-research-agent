@@ -59,7 +59,8 @@ RUN uv sync --frozen --no-install-project --no-dev
 ENV HF_HOME=/opt/hf
 RUN /app/.venv/bin/python -c "\
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings; \
-HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2').embed_query('warmup')"
+HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2', \
+model_kwargs={'revision': '1110a243fdf4706b3f48f1d95db1a4f5529b4d41'}).embed_query('warmup')"
 
 
 # ---------- Stage 2: runtime -------------------------------------------------
